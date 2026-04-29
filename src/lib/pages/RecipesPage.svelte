@@ -174,7 +174,7 @@
 
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick={() => (showForm = false)}>Cancel</button>
-          <button class="btn btn-primary" onclick={save} disabled={!rName || !rBeanBrand}>Save</button>
+          <button class="btn btn-primary" onclick={save} disabled={!rName}>Save</button>
         </div>
       </div>
     </div>

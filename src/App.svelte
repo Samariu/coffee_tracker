@@ -7,13 +7,15 @@
   import StatsPage from './lib/pages/StatsPage.svelte';
   import BeansPage from './lib/pages/BeansPage.svelte';
   import RecipesPage from './lib/pages/RecipesPage.svelte';
+  import SettingsPage from './lib/pages/SettingsPage.svelte';
 
   const NAV = [
-    { id: 'log',     label: 'Log',     icon: '✏️' },
-    { id: 'history', label: 'History', icon: '📋' },
-    { id: 'stats',   label: 'Stats',   icon: '📊' },
-    { id: 'beans',   label: 'Beans',   icon: '☕' },
-    { id: 'recipes', label: 'Recipes', icon: '📌' },
+    { id: 'log',      label: 'Log',      icon: '✏️' },
+    { id: 'history',  label: 'History',  icon: '📋' },
+    { id: 'stats',    label: 'Stats',    icon: '📊' },
+    { id: 'beans',    label: 'Beans',    icon: '☕' },
+    { id: 'recipes',  label: 'Recipes',  icon: '📌' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
   ] as const;
 
   onMount(async () => {
@@ -42,6 +44,8 @@
       <BeansPage />
     {:else if appState.page === 'recipes'}
       <RecipesPage />
+    {:else if appState.page === 'settings'}
+      <SettingsPage />
     {/if}
   </main>
 
@@ -71,7 +75,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.75rem 1rem;
+    padding: calc(0.75rem + var(--safe-top)) 1rem 0.75rem;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;

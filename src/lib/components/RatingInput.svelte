@@ -3,13 +3,16 @@
 </script>
 
 <div class="rating">
+  {#if value === 0}
+    <span class="unrated">tap to rate</span>
+  {/if}
   {#each { length: 10 } as _, i}
     {@const n = i + 1}
     <button
       class="pip"
-      class:active={n <= value}
+      class:active={value > 0 && n <= value}
       class:selected={n === value}
-      onclick={() => (value = n)}
+      onclick={() => (value = value === n ? 0 : n)}
       aria-label="Rate {n}"
     >{n}</button>
   {/each}
@@ -18,7 +21,15 @@
 <style>
   .rating {
     display: flex;
+    align-items: center;
     gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+  .unrated {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-right: 0.25rem;
   }
   .pip {
     width: 2.4rem;

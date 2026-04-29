@@ -1,21 +1,39 @@
 <script lang="ts">
   import { BREW_METHODS, BREW_METHOD_ICONS } from '../utils';
+  import { appState } from '../stores.svelte';
   import type { BrewMethod } from '../types';
 
   let { value = $bindable('v60' as BrewMethod) }: { value?: BrewMethod } = $props();
 
-  const methods = Object.entries(BREW_METHODS) as [BrewMethod, string][];
+  // Sort enabled methods by most-recently-brewed first
+  let sortedMethods = $derived(() => {
+    const lastUsed = new Map<BrewMethod, number>();
+    for (const brew of appState.brews) {
+      const cur = lastUsed.get(brew.method) ?? 0;
+      if (brew.timestamp > cur) lastUsed.set(brew.method, brew.timestamp);
+    }
+    return appState.enabledMethods
+      .slice()
+      .sort((a, b) => (lastUsed.get(b) ?? 0) - (lastUsed.get(a) ?? 0));
+  });
+
+  // If the currently selected method gets disabled, pick the first enabled one
+  $effect(() => {
+    if (!appState.enabledMethods.includes(value) && appState.enabledMethods.length > 0) {
+      value = sortedMethods()[0];
+    }
+  });
 </script>
 
 <div class="method-grid">
-  {#each methods as [key, label]}
+  {#each sortedMethods() as key (key)}
     <button
       class="method-btn"
       class:selected={value === key}
       onclick={() => (value = key)}
     >
       <span class="method-icon">{BREW_METHOD_ICONS[key]}</span>
-      <span class="method-label">{label}</span>
+      <span class="method-label">{BREW_METHODS[key]}</span>
     </button>
   {/each}
 </div>
@@ -42,16 +60,12 @@
     background: var(--surface-3);
     border-color: var(--primary);
   }
-  .method-icon {
-    font-size: 1.3rem;
-  }
+  .method-icon { font-size: 1.3rem; }
   .method-label {
     font-size: 0.65rem;
     color: var(--text-muted);
     text-align: center;
     line-height: 1.2;
   }
-  .method-btn.selected .method-label {
-    color: var(--primary-light);
-  }
+  .method-btn.selected .method-label { color: var(--primary-light); }
 </style>

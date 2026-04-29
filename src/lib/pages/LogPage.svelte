@@ -29,7 +29,7 @@
   let bloomSeconds = $state(0);
   let brewSeconds = $state(0);
 
-  let rating = $state(7);
+  let rating = $state(0);
   let notes = $state('');
 
   let saving = $state(false);
@@ -38,6 +38,7 @@
   // --- derived ---
   let ratio = $derived(brewRatio(beanAmount, waterMl));
   let showBloom = $derived(BLOOM_METHODS.includes(method));
+  let totalSeconds = $derived(bloomSeconds + brewSeconds);
   let selectedBean = $derived(appState.beans.find((b) => b.id === selectedBeanId));
 
   $effect(() => {
@@ -67,7 +68,7 @@
       method,
       water: { amountMl: waterMl, tempCelsius: waterTemp },
       bloomDurationSeconds: bloomSeconds,
-      durationSeconds: brewSeconds,
+      durationSeconds: totalSeconds,
       rating,
       notes,
       synced: false,
@@ -92,7 +93,7 @@
   function reset() {
     beanBrand = ''; beanName = ''; beanOrigin = ''; beanRoast = 'medium';
     beanAmount = 15; grinderNotes = ''; waterMl = 250; waterTemp = 93;
-    bloomSeconds = 0; brewSeconds = 0; rating = 7; notes = '';
+    bloomSeconds = 0; brewSeconds = 0; rating = 0; notes = '';
     selectedBeanId = '';
   }
 
@@ -219,9 +220,14 @@
       {/if}
       <div class="input-unit">
         <input class="input" type="number" min="0" bind:value={brewSeconds} />
-        <span class="unit">s total</span>
+        <span class="unit">s brew</span>
       </div>
     </div>
+    {#if showBloom && (bloomSeconds > 0 || brewSeconds > 0)}
+      <div class="total-badge">
+        Total: {totalSeconds}s ({Math.floor(totalSeconds / 60)}:{String(totalSeconds % 60).padStart(2,'0')})
+      </div>
+    {/if}
   </section>
 
   <!-- Rating -->
@@ -315,6 +321,15 @@
     font-size: 1rem;
     font-weight: 700;
     color: var(--primary-light);
+  }
+  .total-badge {
+    font-size: 0.8rem;
+    color: var(--primary-light);
+    font-weight: 600;
+    text-align: center;
+    padding: 0.3rem;
+    background: var(--surface-2);
+    border-radius: 8px;
   }
   .toggle-label {
     display: flex;

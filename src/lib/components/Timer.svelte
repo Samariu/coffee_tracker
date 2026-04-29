@@ -9,12 +9,17 @@
 
   let running = $state(false);
   let seconds = $state(0);
+  let startTime = 0;
   let handle: ReturnType<typeof setInterval> | null = null;
 
   function start() {
     if (running) return;
+    // Offset by already-elapsed seconds so resume works correctly
+    startTime = Date.now() - seconds * 1000;
     running = true;
-    handle = setInterval(() => seconds++, 1000);
+    handle = setInterval(() => {
+      seconds = Math.floor((Date.now() - startTime) / 1000);
+    }, 250);
   }
 
   function stop() {
@@ -37,6 +42,15 @@
     const sec = s % 60;
     return `${m}:${sec.toString().padStart(2, '0')}`;
   }
+
+  // Re-sync immediately when tab regains focus (iOS throttles background intervals)
+  $effect(() => {
+    function onVisible() {
+      if (running) seconds = Math.floor((Date.now() - startTime) / 1000);
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
 </script>
 
 <div class="timer" class:running>
@@ -63,9 +77,7 @@
     border: 1px solid var(--border);
     transition: border-color 0.2s;
   }
-  .timer.running {
-    border-color: var(--primary);
-  }
+  .timer.running { border-color: var(--primary); }
   .timer-label {
     font-size: 0.8rem;
     color: var(--text-muted);
