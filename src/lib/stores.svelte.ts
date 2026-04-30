@@ -21,6 +21,26 @@ export function saveEnabledMethods(methods: BrewMethod[]) {
 
 export { ALL_METHODS };
 
+export const swState = $state({
+  updateAvailable: false,
+  checking: false,
+  upToDate: false,
+  applyUpdate: null as ((reloadPage?: boolean) => Promise<void>) | null,
+  registration: null as ServiceWorkerRegistration | null,
+});
+
+export async function checkForUpdates() {
+  if (!swState.registration) return;
+  swState.checking = true;
+  swState.upToDate = false;
+  try {
+    await swState.registration.update();
+  } finally {
+    swState.checking = false;
+    if (!swState.updateAvailable) swState.upToDate = true;
+  }
+}
+
 export const appState = $state({
   page: 'log' as Page,
   brews: [] as Brew[],

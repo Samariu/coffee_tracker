@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { registerSW } from 'virtual:pwa-register';
   import { initDB } from './lib/db';
-  import { appState, refreshAll } from './lib/stores.svelte';
+  import { appState, refreshAll, swState } from './lib/stores.svelte';
   import LogPage from './lib/pages/LogPage.svelte';
   import HistoryPage from './lib/pages/HistoryPage.svelte';
   import StatsPage from './lib/pages/StatsPage.svelte';
@@ -19,17 +19,17 @@
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ] as const;
 
-  let updateAvailable = $state(false);
-  let applyUpdate: ((reloadPage?: boolean) => Promise<void>) | null = null;
-
   onMount(async () => {
     await initDB();
     await refreshAll();
     appState.dbReady = true;
 
-    applyUpdate = registerSW({
+    swState.applyUpdate = registerSW({
       onNeedRefresh() {
-        updateAvailable = true;
+        swState.updateAvailable = true;
+      },
+      onRegistered(r) {
+        if (r) swState.registration = r;
       },
       // silence the error when offline and SW can't reach network
       onOfflineReady() {},
@@ -44,10 +44,10 @@
     <span class="app-title">Coffee Tracker</span>
   </header>
 
-  {#if updateAvailable}
+  {#if swState.updateAvailable}
     <div class="update-bar">
       <span>Update available</span>
-      <button class="update-btn" onclick={() => applyUpdate?.(true)}>Reload</button>
+      <button class="update-btn" onclick={() => swState.applyUpdate?.(true)}>Reload</button>
     </div>
   {/if}
 

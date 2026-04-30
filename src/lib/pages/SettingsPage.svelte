@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { appState, saveEnabledMethods, ALL_METHODS } from '../stores.svelte';
+  import { appState, saveEnabledMethods, ALL_METHODS, swState, checkForUpdates } from '../stores.svelte';
   import { BREW_METHODS, BREW_METHOD_ICONS } from '../utils';
   import type { BrewMethod } from '../types';
 
@@ -21,6 +21,24 @@
 </script>
 
 <div class="page">
+  <section class="section">
+    <span class="label">App</span>
+    <div class="update-row">
+      {#if swState.updateAvailable}
+        <span class="update-status ready">Update ready</span>
+        <button class="btn btn-primary btn-sm" onclick={() => swState.applyUpdate?.(true)}>Reload</button>
+      {:else if swState.checking}
+        <span class="update-status muted">Checking…</span>
+      {:else if swState.upToDate}
+        <span class="update-status muted">Up to date</span>
+        <button class="btn btn-ghost btn-sm" onclick={checkForUpdates}>Check again</button>
+      {:else}
+        <span class="update-status muted">Tap to check for a new version</span>
+        <button class="btn btn-ghost btn-sm" onclick={checkForUpdates}>Check for updates</button>
+      {/if}
+    </div>
+  </section>
+
   <section class="section">
     <div class="section-header">
       <span class="label">Brew Methods</span>
@@ -47,6 +65,18 @@
 </div>
 
 <style>
+  .update-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .update-status {
+    font-size: 0.85rem;
+    flex: 1;
+  }
+  .update-status.ready { color: var(--primary-light); font-weight: 600; }
+  .update-status.muted { color: var(--text-muted); }
   .section-header {
     display: flex;
     justify-content: space-between;
