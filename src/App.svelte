@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { registerSW } from 'virtual:pwa-register';
   import { initDB } from './lib/db';
   import { appState, refreshAll } from './lib/stores.svelte';
   import LogPage from './lib/pages/LogPage.svelte';
@@ -18,10 +19,22 @@
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ] as const;
 
+  let updateAvailable = $state(false);
+  let applyUpdate: ((reloadPage?: boolean) => Promise<void>) | null = null;
+
   onMount(async () => {
     await initDB();
     await refreshAll();
     appState.dbReady = true;
+
+    applyUpdate = registerSW({
+      onNeedRefresh() {
+        updateAvailable = true;
+      },
+      // silence the error when offline and SW can't reach network
+      onOfflineReady() {},
+      onRegisterError() {},
+    });
   });
 </script>
 
@@ -30,6 +43,13 @@
     <span class="app-logo">☕</span>
     <span class="app-title">Coffee Tracker</span>
   </header>
+
+  {#if updateAvailable}
+    <div class="update-bar">
+      <span>Update available</span>
+      <button class="update-btn" onclick={() => applyUpdate?.(true)}>Reload</button>
+    </div>
+  {/if}
 
   <main class="app-main">
     {#if !appState.dbReady}
@@ -87,6 +107,27 @@
     color: var(--primary-light);
     letter-spacing: 0.02em;
   }
+  .update-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    background: var(--primary);
+    color: #1a1008;
+    font-size: 0.85rem;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .update-btn {
+    background: rgba(0,0,0,0.15);
+    border: none;
+    border-radius: 8px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1a1008;
+    cursor: pointer;
+  }
   .app-main {
     flex: 1;
     overflow-y: auto;
@@ -115,9 +156,7 @@
     cursor: pointer;
     transition: background 0.15s;
   }
-  .nav-btn.active {
-    background: var(--surface-2);
-  }
+  .nav-btn.active { background: var(--surface-2); }
   .nav-icon { font-size: 1.2rem; }
   .nav-label {
     font-size: 0.65rem;
