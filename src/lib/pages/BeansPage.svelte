@@ -35,10 +35,12 @@
     if (!brand || !name) return;
     if (editingId) {
       const existing = appState.beans.find((b) => b.id === editingId)!;
+      const usedGrams = existing.initialAmountGrams - existing.remainingGrams;
       await updateBean({
         ...existing,
         brand, name, origin, roastLevel,
         initialAmountGrams: initialAmount,
+        remainingGrams: Math.max(0, initialAmount - usedGrams),
         purchaseDate: new Date(purchaseDate).getTime(),
         notes: beanNotes,
       });

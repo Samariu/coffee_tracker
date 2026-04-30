@@ -31,9 +31,16 @@
 
   let rating = $state(0);
   let notes = $state('');
+  let brewDate = $state(nowLocal());
 
   let saving = $state(false);
   let saved = $state(false);
+
+  function nowLocal(): string {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  }
 
   // --- derived ---
   let ratio = $derived(brewRatio(beanAmount, waterMl));
@@ -56,7 +63,7 @@
 
     const brew: Brew = {
       id: generateId(),
-      timestamp: Date.now(),
+      timestamp: new Date(brewDate).getTime(),
       beans: {
         brand: beanBrand,
         name: beanName,
@@ -94,7 +101,7 @@
     beanBrand = ''; beanName = ''; beanOrigin = ''; beanRoast = 'medium';
     beanAmount = 15; grinderNotes = ''; waterMl = 250; waterTemp = 93;
     bloomSeconds = 0; brewSeconds = 0; rating = 0; notes = '';
-    selectedBeanId = '';
+    selectedBeanId = ''; brewDate = nowLocal();
   }
 
   function applyRecipe(id: string) {
@@ -240,6 +247,8 @@
   <section class="section">
     <span class="label">Notes</span>
     <textarea class="textarea" rows="3" placeholder="Tasting notes, observations..." bind:value={notes}></textarea>
+    <label class="field-label" for="brew-date">Date &amp; Time</label>
+    <input id="brew-date" class="input" type="datetime-local" bind:value={brewDate} />
   </section>
 
   <button class="btn btn-primary btn-lg" onclick={save} disabled={saving || !beanBrand || !beanName}>
@@ -330,6 +339,10 @@
     padding: 0.3rem;
     background: var(--surface-2);
     border-radius: 8px;
+  }
+  .field-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
   }
   .toggle-label {
     display: flex;
