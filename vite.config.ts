@@ -2,8 +2,11 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// GitHub Actions sets GITHUB_ACTIONS=true; Netlify does not.
+const base = process.env.GITHUB_ACTIONS ? '/coffee_tracker/' : '/';
+
 export default defineConfig({
-  base: '/coffee_tracker/',
+  base,
   plugins: [
     svelte(),
     VitePWA({
@@ -17,17 +20,17 @@ export default defineConfig({
         background_color: '#1a1008',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/coffee_tracker/',
-        scope: '/coffee_tracker/',
+        start_url: base,
+        scope: base,
         icons: [
           {
-            src: '/coffee_tracker/icons/icon-192.png',
+            src: `${base}icons/icon-192.png`,
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any maskable',
           },
           {
-            src: '/coffee_tracker/icons/icon-512.png',
+            src: `${base}icons/icon-512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable',
