@@ -82,3 +82,28 @@ export async function deleteRecipe(id: string): Promise<void> {
 export async function getAllRecipes(): Promise<Recipe[]> {
   return getDB().getAll('recipes');
 }
+
+// --- Backup / Restore ---
+
+export async function clearAllData(): Promise<void> {
+  const d = getDB();
+  await Promise.all([d.clear('brews'), d.clear('beans'), d.clear('recipes')]);
+}
+
+export async function putAllBrews(brews: Brew[]): Promise<void> {
+  const tx = getDB().transaction('brews', 'readwrite');
+  for (const b of brews) tx.store.put(b);
+  await tx.done;
+}
+
+export async function putAllBeans(beans: Bean[]): Promise<void> {
+  const tx = getDB().transaction('beans', 'readwrite');
+  for (const b of beans) tx.store.put(b);
+  await tx.done;
+}
+
+export async function putAllRecipes(recipes: Recipe[]): Promise<void> {
+  const tx = getDB().transaction('recipes', 'readwrite');
+  for (const r of recipes) tx.store.put(r);
+  await tx.done;
+}
