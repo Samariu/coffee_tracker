@@ -3,6 +3,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/coffee_tracker/',
   plugins: [
     svelte(),
     VitePWA({
@@ -16,16 +17,17 @@ export default defineConfig({
         background_color: '#1a1008',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        start_url: '/coffee_tracker/',
+        scope: '/coffee_tracker/',
         icons: [
           {
-            src: '/icons/icon-192.png',
+            src: '/coffee_tracker/icons/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any maskable',
           },
           {
-            src: '/icons/icon-512.png',
+            src: '/coffee_tracker/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable',
