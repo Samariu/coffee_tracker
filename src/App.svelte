@@ -135,7 +135,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    -webkit-overflow-scrolling: touch;
   }
   .app-nav {
     display: flex;
