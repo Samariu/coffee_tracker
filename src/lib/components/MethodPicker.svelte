@@ -3,7 +3,10 @@
   import { appState } from '../stores.svelte';
   import type { BrewMethod } from '../types';
 
-  let { value = $bindable('v60' as BrewMethod) }: { value?: BrewMethod } = $props();
+  let {
+    value = $bindable('v60' as BrewMethod),
+    onchange,
+  }: { value?: BrewMethod; onchange?: (m: BrewMethod) => void } = $props();
 
   // Sort enabled methods by most-recently-brewed first
   let sortedMethods = $derived(() => {
@@ -30,7 +33,7 @@
     <button
       class="method-btn"
       class:selected={value === key}
-      onclick={() => (value = key)}
+      onclick={() => { value = key; onchange?.(key); }}
     >
       <span class="method-icon">{BREW_METHOD_ICONS[key]}</span>
       <span class="method-label">{BREW_METHODS[key]}</span>

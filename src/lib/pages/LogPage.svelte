@@ -5,7 +5,7 @@
   import MethodPicker from '../components/MethodPicker.svelte';
   import { appState, refreshBrews, refreshBeans } from '../stores.svelte';
   import { addBrew, updateBean } from '../db';
-  import { generateId, brewRatio, BLOOM_METHODS, ROAST_LEVELS } from '../utils';
+  import { generateId, brewRatio, BLOOM_METHODS, ROAST_LEVELS, METHOD_DEFAULTS } from '../utils';
   import type { Brew, BrewMethod, RoastLevel } from '../types';
 
   // --- form state ---
@@ -104,6 +104,14 @@
     selectedBeanId = ''; brewDate = nowLocal();
   }
 
+  function changeMethod(m: BrewMethod) {
+    method = m;
+    const d = METHOD_DEFAULTS[m];
+    beanAmount = d.beans;
+    waterMl = d.water;
+    waterTemp = d.temp;
+  }
+
   function applyRecipe(id: string) {
     const recipe = appState.recipes.find((r) => r.id === id);
     if (!recipe) return;
@@ -189,7 +197,7 @@
   <!-- Method -->
   <section class="section">
     <span class="label">Brew Method</span>
-    <MethodPicker bind:value={method} />
+    <MethodPicker value={method} onchange={changeMethod} />
   </section>
 
   <!-- Water -->

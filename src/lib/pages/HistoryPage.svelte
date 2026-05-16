@@ -230,18 +230,25 @@
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.6);
     display: flex; align-items: flex-end;
-    z-index: 50;
+    z-index: 200;
   }
   .modal {
     width: 100%;
     background: var(--surface);
     border-radius: 20px 20px 0 0;
-    padding: 1.5rem 1rem calc(1.5rem + var(--safe-bottom));
+    padding: 1.5rem 1rem 0;
     display: flex; flex-direction: column; gap: 0.65rem;
-    max-height: 92vh; overflow-y: auto;
+    max-height: 92dvh; overflow-y: auto;
   }
   .modal-title { font-size: 1.1rem; font-weight: 700; color: var(--text); margin: 0 0 0.25rem; }
-  .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem; }
+  .modal-footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    display: flex; justify-content: flex-end; gap: 0.75rem;
+    padding: 0.75rem 0 calc(1rem + var(--safe-bottom));
+    margin-top: 0.25rem;
+  }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
   .field { display: flex; flex-direction: column; gap: 0.3rem; }

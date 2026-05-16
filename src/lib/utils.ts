@@ -68,6 +68,18 @@ export const BREW_METHOD_ICONS: Record<BrewMethod, string> = {
 /** Methods that have a bloom phase. */
 export const BLOOM_METHODS: BrewMethod[] = ['v60', 'chemex', 'aeropress'];
 
+/** Default water/bean settings when switching brew method. */
+export const METHOD_DEFAULTS: Record<BrewMethod, { beans: number; water: number; temp: number }> = {
+  v60:          { beans: 15, water: 250, temp: 93 },
+  french_press: { beans: 15, water: 250, temp: 93 },
+  aeropress:    { beans: 15, water: 220, temp: 88 },
+  moka_pot:     { beans: 15, water: 150, temp: 93 },
+  chemex:       { beans: 30, water: 500, temp: 93 },
+  cold_brew:    { beans: 80, water: 640, temp: 20 },
+  espresso:     { beans: 18, water: 36,  temp: 93 },
+  other:        { beans: 15, water: 250, temp: 93 },
+};
+
 export const ROAST_LEVELS = [
   { value: 'light', label: 'Light' },
   { value: 'medium-light', label: 'Med. Light' },

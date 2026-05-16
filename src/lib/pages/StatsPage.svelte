@@ -12,9 +12,10 @@
   let brews = $derived(appState.brews);
 
   let totalBrews = $derived(brews.length);
-  let avgRating = $derived(
-    brews.length ? (brews.reduce((s, b) => s + b.rating, 0) / brews.length).toFixed(1) : '—'
-  );
+  let avgRating = $derived(() => {
+    const rated = brews.filter((b) => b.rating > 0);
+    return rated.length ? (rated.reduce((s, b) => s + b.rating, 0) / rated.length).toFixed(1) : '—';
+  });
   let avgRatio = $derived(() => {
     const valid = brews.filter((b) => b.beans.amountGrams && b.water.amountMl);
     if (!valid.length) return '—';
@@ -27,6 +28,7 @@
   let beanRatings = $derived(() => {
     const map = new Map<string, BeanGroup>();
     for (const b of brews) {
+      if (b.rating === 0) continue;
       const key = `${b.beans.brand} — ${b.beans.name}`;
       const cur = map.get(key) ?? { sum: 0, count: 0 };
       map.set(key, { sum: cur.sum + b.rating, count: cur.count + 1 });
@@ -64,8 +66,8 @@
     }).filter(Boolean) as { name: string; avgClick: number; count: number }[];
   });
 
-  // Rating over time (last 20 brews)
-  let ratingTrend = $derived(brews.slice(0, 20).reverse());
+  // Rating over time (last 20 rated brews)
+  let ratingTrend = $derived(brews.filter((b) => b.rating > 0).slice(0, 20).reverse());
   let maxRating = 10;
 </script>
 
@@ -82,7 +84,7 @@
         <span class="stat-label">Total brews</span>
       </div>
       <div class="stat-card">
-        <span class="stat-value">{avgRating}</span>
+        <span class="stat-value">{avgRating()}</span>
         <span class="stat-label">Avg rating</span>
       </div>
       <div class="stat-card">
