@@ -1,74 +1,52 @@
 <script lang="ts">
-  import { BREW_METHODS, BREW_METHOD_ICONS } from '../utils';
+  import Icon from './Icon.svelte';
+  import { METHODS } from '../constants';
   import { appState } from '../stores.svelte';
+  import { revealSelected } from '../dom';
   import type { BrewMethod } from '../types';
 
   let {
     value = $bindable('v60' as BrewMethod),
+    methods,
     onchange,
-  }: { value?: BrewMethod; onchange?: (m: BrewMethod) => void } = $props();
+  }: {
+    value?: BrewMethod;
+    /** Defaults to the methods enabled in Settings, most recently brewed first. */
+    methods?: BrewMethod[];
+    onchange?: (m: BrewMethod) => void;
+  } = $props();
 
-  // Sort enabled methods by most-recently-brewed first
   let sortedMethods = $derived.by(() => {
+    if (methods) return methods;
     const lastUsed = new Map<BrewMethod, number>();
     for (const brew of appState.brews.slice(0, 50)) {
-      const cur = lastUsed.get(brew.method) ?? 0;
-      if (brew.timestamp > cur) lastUsed.set(brew.method, brew.timestamp);
+      if (!lastUsed.has(brew.method)) lastUsed.set(brew.method, brew.timestamp);
     }
-    return appState.enabledMethods
+    const list = appState.enabledMethods
       .slice()
       .sort((a, b) => (lastUsed.get(b) ?? 0) - (lastUsed.get(a) ?? 0));
+    // Never hide the current value — an old brew may use a since-disabled method.
+    return list.includes(value) ? list : [value, ...list];
   });
 
-  // If the currently selected method gets disabled, pick the first enabled one
-  $effect(() => {
-    if (!appState.enabledMethods.includes(value) && appState.enabledMethods.length > 0) {
-      value = sortedMethods[0];
-    }
-  });
+  let row: HTMLElement;
+  $effect(() => revealSelected(row, value));
+
+  function pick(m: BrewMethod) {
+    value = m;
+    onchange?.(m);
+  }
 </script>
 
-<div class="method-grid">
+<div class="chip-scroll methods" bind:this={row}>
   {#each sortedMethods as key (key)}
-    <button
-      class="method-btn"
-      class:selected={value === key}
-      onclick={() => { value = key; onchange?.(key); }}
-    >
-      <span class="method-icon">{BREW_METHOD_ICONS[key]}</span>
-      <span class="method-label">{BREW_METHODS[key]}</span>
+    <button class="chip" class:selected={value === key} onclick={() => pick(key)}>
+      <Icon method={key} size={18} />
+      {METHODS[key].label}
     </button>
   {/each}
 </div>
 
 <style>
-  .method-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.5rem;
-  }
-  .method-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.6rem 0.25rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .method-btn.selected {
-    background: var(--surface-3);
-    border-color: var(--primary);
-  }
-  .method-icon { font-size: 1.3rem; }
-  .method-label {
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    text-align: center;
-    line-height: 1.2;
-  }
-  .method-btn.selected .method-label { color: var(--primary-light); }
+  .methods { --chip-bleed: 14px; }
 </style>

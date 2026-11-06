@@ -11,6 +11,7 @@
   }: {
     value?: number;
     step?: number;
+    /** Size of the outer ±buttons; 0 hides them. */
     coarse?: number;
     min?: number;
     max?: number;
@@ -18,6 +19,8 @@
     label?: string;
     decimals?: number;
   } = $props();
+
+  const id = $props.id();
 
   /** Clearing a number input binds `undefined`. Snap back to a usable value on blur
    *  so a half-edited field can never reach the saved brew. */
@@ -35,19 +38,23 @@
 </script>
 
 <div class="stepper">
-  {#if label}<span class="stepper-label">{label}</span>{/if}
-  <div class="stepper-row">
+  {#if label}<label class="stepper-label" for={id}>{label}</label>{/if}
+  <div class="controls">
     {#if coarse > 0}
-      <button class="nudge wide" onclick={() => nudge(-coarse)} aria-label="Decrease by {coarse}">−{coarse}</button>
+      <button class="nudge coarse" onclick={() => nudge(-coarse)} aria-label="Decrease {label} by {coarse}">−{coarse}</button>
     {/if}
-    <button class="nudge" onclick={() => nudge(-step)} aria-label="Decrease">−</button>
+    <button class="nudge" onclick={() => nudge(-step)} aria-label="Decrease {label}">
+      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7h10" /></svg>
+    </button>
     <div class="value-wrap">
-      <input class="input value" type="number" inputmode="decimal" {step} {min} {max} bind:value onblur={normalize} />
+      <input {id} class="value" type="number" inputmode="decimal" {step} {min} {max} bind:value onblur={normalize} />
       {#if unit}<span class="unit">{unit}</span>{/if}
     </div>
-    <button class="nudge" onclick={() => nudge(step)} aria-label="Increase">+</button>
+    <button class="nudge" onclick={() => nudge(step)} aria-label="Increase {label}">
+      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7h10M7 2v10" /></svg>
+    </button>
     {#if coarse > 0}
-      <button class="nudge wide" onclick={() => nudge(coarse)} aria-label="Increase by {coarse}">+{coarse}</button>
+      <button class="nudge coarse" onclick={() => nudge(coarse)} aria-label="Increase {label} by {coarse}">+{coarse}</button>
     {/if}
   </div>
 </div>
@@ -55,71 +62,72 @@
 <style>
   .stepper {
     display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     min-width: 0;
   }
   .stepper-label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-2);
+    white-space: nowrap;
   }
-  .stepper-row {
+  .controls {
     display: flex;
-    align-items: stretch;
-    gap: 0.25rem;
+    align-items: center;
+    gap: 4px;
   }
   .nudge {
-    flex: 0 0 auto;
-    min-width: 2.4rem;
-    min-height: 2.75rem;
-    border-radius: 10px;
-    border: 1px solid var(--border);
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 0;
     background: var(--surface-2);
-    color: var(--primary-light);
-    font-size: 1.1rem;
-    font-weight: 700;
-    font-family: inherit;
+    color: var(--text);
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    -webkit-tap-highlight-color: transparent;
+    transition: background 0.12s, transform 0.1s;
   }
-  .nudge.wide {
-    min-width: 2.6rem;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-  .nudge:active { background: var(--surface-3); }
-  .value-wrap {
-    position: relative;
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-  }
-  /* 1rem keeps iOS from zooming the viewport on focus. */
-  .value {
-    text-align: center;
-    font-size: 1rem;
+  .nudge:active { background: var(--surface-3); transform: scale(0.92); }
+  .nudge svg { stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; fill: none; }
+  .nudge.coarse {
+    width: 36px;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 0.74rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    padding-right: 1.6rem;
-    -moz-appearance: textfield;
-    appearance: textfield;
   }
-  .value::-webkit-outer-spin-button,
-  .value::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
+  .value-wrap {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    width: 76px;
+    padding: 0 2px;
   }
+  .value {
+    width: 100%;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    padding: 4px 0;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    outline: none;
+  }
+  .value:focus { background: var(--surface-2); }
   .unit {
-    position: absolute;
-    right: 0.5rem;
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    pointer-events: none;
+    flex-shrink: 0;
+    margin-left: 2px;
+    font-size: 0.8rem;
+    color: var(--text-3);
   }
 </style>

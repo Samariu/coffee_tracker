@@ -2,7 +2,10 @@
   import { onMount } from 'svelte';
   import { registerSW } from 'virtual:pwa-register';
   import { initDB } from './lib/db';
-  import { appState, refreshAll, swState } from './lib/stores.svelte';
+  import { appState, go, refreshAll, swState, type Page } from './lib/stores.svelte';
+  import type { IconName } from './lib/icons';
+  import Icon from './lib/components/Icon.svelte';
+  import Toast from './lib/components/Toast.svelte';
   import LogPage from './lib/pages/LogPage.svelte';
   import HistoryPage from './lib/pages/HistoryPage.svelte';
   import StatsPage from './lib/pages/StatsPage.svelte';
@@ -10,14 +13,21 @@
   import RecipesPage from './lib/pages/RecipesPage.svelte';
   import SettingsPage from './lib/pages/SettingsPage.svelte';
 
-  const NAV = [
-    { id: 'log',      label: 'Log',      icon: '✏️' },
-    { id: 'history',  label: 'History',  icon: '📋' },
-    { id: 'stats',    label: 'Stats',    icon: '📊' },
-    { id: 'beans',    label: 'Beans',    icon: '☕' },
-    { id: 'recipes',  label: 'Recipes',  icon: '📌' },
-    { id: 'settings', label: 'Settings', icon: '⚙️' },
-  ] as const;
+  const NAV: { id: Page; label: string; icon: IconName }[] = [
+    { id: 'log',     label: 'Brew',     icon: 'brew' },
+    { id: 'history', label: 'Journal',  icon: 'journal' },
+    { id: 'stats',   label: 'Insights', icon: 'insights' },
+    { id: 'beans',   label: 'Beans',    icon: 'bean' },
+    { id: 'recipes', label: 'Recipes',  icon: 'recipe' },
+  ];
+
+  let main: HTMLElement;
+
+  // Each tab starts at the top rather than inheriting the last page's scroll.
+  $effect(() => {
+    void appState.page;
+    main?.scrollTo(0, 0);
+  });
 
   onMount(async () => {
     await initDB();
@@ -39,21 +49,17 @@
 </script>
 
 <div class="app">
-  <header class="app-header">
-    <span class="app-logo">☕</span>
-    <span class="app-title">Coffee Tracker</span>
-  </header>
-
   {#if swState.updateAvailable}
     <div class="update-bar">
-      <span>Update available</span>
-      <button class="update-btn" onclick={() => swState.applyUpdate?.(true)}>Reload</button>
+      <Icon name="refresh" size={16} />
+      <span>A new version is ready</span>
+      <button class="btn btn-sm btn-primary" onclick={() => swState.applyUpdate?.(true)}>Reload</button>
     </div>
   {/if}
 
-  <main class="app-main">
+  <main class="app-main" bind:this={main}>
     {#if !appState.dbReady}
-      <div class="loading">Loading…</div>
+      <div class="loading"><Icon name="brew" size={28} /></div>
     {:else if appState.page === 'log'}
       <LogPage />
     {:else if appState.page === 'history'}
@@ -70,17 +76,21 @@
   </main>
 
   <nav class="app-nav">
-    {#each NAV as item}
+    {#each NAV as item (item.id)}
+      {@const active = appState.page === item.id}
       <button
         class="nav-btn"
-        class:active={appState.page === item.id}
-        onclick={() => (appState.page = item.id)}
+        class:active
+        aria-current={active ? 'page' : undefined}
+        onclick={() => go(item.id)}
       >
-        <span class="nav-icon">{item.icon}</span>
+        <span class="nav-icon"><Icon name={item.icon} size={22} stroke={active ? 2 : 1.6} /></span>
         <span class="nav-label">{item.label}</span>
       </button>
     {/each}
   </nav>
+
+  <Toast />
 </div>
 
 <style>
@@ -88,59 +98,33 @@
     display: flex;
     flex-direction: column;
     height: 100dvh;
-    max-width: 480px;
+    max-width: 520px;
     margin: 0 auto;
-  }
-  .app-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: calc(0.75rem + var(--safe-top)) 1rem 0.75rem;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .app-logo { font-size: 1.3rem; }
-  .app-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--primary-light);
-    letter-spacing: 0.02em;
   }
   .update-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 1rem;
-    background: var(--primary);
-    color: #1a1008;
+    gap: 10px;
+    padding: calc(10px + var(--safe-top)) 16px 10px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+    color: var(--text-2);
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 500;
     flex-shrink: 0;
   }
-  .update-btn {
-    background: rgba(0,0,0,0.15);
-    border: none;
-    border-radius: 8px;
-    padding: 0.3rem 0.75rem;
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #1a1008;
-    cursor: pointer;
-  }
+  .update-bar span { flex: 1; }
   .app-main {
     flex: 1;
     overflow-y: auto;
-    padding: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    overscroll-behavior-y: contain;
   }
   .app-nav {
     display: flex;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding-bottom: var(--safe-bottom);
+    height: calc(var(--nav-h) + var(--safe-bottom));
+    padding: 0 6px var(--safe-bottom);
+    background: var(--bg);
+    border-top: 1px solid var(--line);
     flex-shrink: 0;
   }
   .nav-btn {
@@ -148,29 +132,34 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.2rem;
-    padding: 0.6rem 0.25rem;
+    justify-content: center;
+    gap: 3px;
     background: none;
     border: none;
+    color: var(--text-3);
     cursor: pointer;
-    transition: background 0.15s;
+    transition: color 0.15s;
   }
-  .nav-btn.active { background: var(--surface-2); }
-  .nav-icon { font-size: 1.2rem; }
+  .nav-icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 30px;
+    border-radius: 999px;
+    transition: background 0.2s;
+  }
+  .nav-btn.active { color: var(--accent-2); }
+  .nav-btn.active .nav-icon { background: var(--accent-soft); }
   .nav-label {
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    letter-spacing: 0.02em;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
   }
-  .nav-btn.active .nav-label {
-    color: var(--primary-light);
-    font-weight: 600;
-  }
+  .nav-btn.active .nav-label { color: var(--text); font-weight: 600; }
   .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     height: 100%;
-    color: var(--text-muted);
+    color: var(--text-3);
   }
 </style>

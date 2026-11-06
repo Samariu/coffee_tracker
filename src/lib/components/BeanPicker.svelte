@@ -1,48 +1,52 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
+  import { beanTitle } from '../format';
+  import { revealSelected } from '../dom';
   import type { BeanOption } from '../types';
-  import { beanTitle } from '../utils';
 
   let {
     options,
     selectedKey = '',
+    adding = false,
     onpick,
     onnew,
   }: {
     options: BeanOption[];
     selectedKey?: string;
+    /** The "New" chip is active — the user is typing a bean in. */
+    adding?: boolean;
     onpick: (o: BeanOption) => void;
     onnew: () => void;
   } = $props();
+
+  let row: HTMLElement;
+  $effect(() => revealSelected(row, selectedKey));
 </script>
 
-<div class="chip-row">
+<div class="chip-scroll beans" bind:this={row}>
   {#each options as o (o.key)}
     <button class="chip" class:selected={o.key === selectedKey} onclick={() => onpick(o)}>
-      <span class="chip-name">{beanTitle(o.brand, o.name)}</span>
+      <span class="name">{beanTitle(o.brand, o.name)}</span>
       {#if o.remainingGrams !== null}
-        <span class="chip-meta" class:empty={o.remainingGrams <= 0}>{o.remainingGrams}g</span>
+        <span class="grams num" class:empty={o.remainingGrams <= 0}>{o.remainingGrams}g</span>
       {/if}
     </button>
   {/each}
-  <button class="chip chip-new" onclick={onnew}>+ New</button>
+  <button class="chip new" class:selected={adding} onclick={onnew}>
+    <Icon name="plus" size={16} /> New
+  </button>
 </div>
 
 <style>
-  .chip-name {
+  .beans { --chip-bleed: 14px; }
+  .name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 11rem;
+    max-width: 13rem;
   }
-  .chip-meta {
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--text-muted);
-  }
-  .chip-meta.empty { color: var(--error); }
-  .chip.selected .chip-meta { color: var(--primary-light); }
-  .chip-new {
-    color: var(--primary-light);
-    border-style: dashed;
-  }
+  .grams { font-size: 0.75rem; color: var(--text-3); }
+  .grams.empty { color: var(--danger); }
+  .chip.selected .grams { color: var(--accent); }
+  .new { border-style: dashed; }
 </style>

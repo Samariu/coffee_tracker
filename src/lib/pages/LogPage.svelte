@@ -7,21 +7,23 @@
   import Stepper from '../components/Stepper.svelte';
   import SetupStrip from '../components/SetupStrip.svelte';
   import BeanPicker from '../components/BeanPicker.svelte';
+  import PageHeader from '../components/PageHeader.svelte';
+  import Icon from '../components/Icon.svelte';
   import { appState, refreshBrews, refreshBeans } from '../stores.svelte';
-  import { addBrew, deleteBrew, updateBean } from '../db';
-  import { blankDraft, loadDraft, nowLocal, saveDraft } from '../draft';
+  import { addBrew, deleteBrew, newId, putBean } from '../db';
+  import { blankDraft, draftFromValues, loadDraft, nowLocal, saveDraft } from '../draft';
+  import { toastUndo } from '../toast.svelte';
+  import { METHODS, ROAST_LEVELS } from '../constants';
+  import { brewRatio, formatClock } from '../format';
   import {
-    generateId,
-    brewRatio,
     beanKey,
     beanOptions,
+    brewToValues,
     defaultsFor,
     findInventoryBean,
     recentSetups,
     recipeSetups,
-    BLOOM_METHODS,
-    ROAST_LEVELS,
-  } from '../utils';
+  } from '../setups';
   import type { BeanOption, Brew, BrewMethod, LogDraft, Setup } from '../types';
 
   /**
@@ -44,23 +46,37 @@
   }
 
   let form = $state<LogDraft>(initialForm());
-  let newBean = $state(false);
+  // Typing a bean in starts from an empty one, so this can't be derived from the
+  // fields — the first keystroke would hide the inputs being typed into.
+  let newBean = $state(!form.brand && !form.name);
   let saving = $state(false);
-  let lastSaved = $state<{ brew: Brew; beanId: string; grams: number } | null>(null);
-  let undoTimer: ReturnType<typeof setTimeout> | null = null;
+  let mounted = true;
+
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
   // --- derived ---
   let ratio = $derived(brewRatio(form.amountGrams, form.waterMl));
-  let showBloom = $derived(BLOOM_METHODS.includes(form.method));
-  let totalSeconds = $derived(form.bloomSeconds + form.brewSeconds);
-  let beanOpts = $derived(beanOptions(appState.beans, appState.brews, 6));
+  let showBloom = $derived(METHODS[form.method].bloom);
+  let totalSeconds = $derived((showBloom ? form.bloomSeconds : 0) + form.brewSeconds);
+  let beanOpts = $derived(beanOptions(appState.beans, appState.brews, 8));
   let selectedBeanKey = $derived(beanKey(form.brand, form.name));
+  let inventoryBean = $derived(form.beanId ? appState.beans.find((b) => b.id === form.beanId) : undefined);
 
   let setups = $derived.by(() => {
     const hist = recentSetups(appState.brews, 4);
     const keys = new Set(hist.map((s) => s.key));
     return [...hist, ...recipeSetups(appState.recipes, keys)].slice(0, 6);
   });
+
+  /** What's hiding behind "More details", so it isn't out of sight, out of mind. */
+  let moreSummary = $derived(
+    [
+      `${form.waterTemp}°C`,
+      totalSeconds > 0 ? formatClock(totalSeconds) : '',
+      form.notes ? 'notes' : '',
+      form.dateTouched ? 'custom date' : '',
+    ].filter(Boolean).join(' · '),
+  );
 
   // --- draft persistence ---
   let saveHandle: ReturnType<typeof setTimeout> | null = null;
@@ -77,9 +93,9 @@
 
   // The effect teardown cancels a pending write, so flush on the way out.
   onDestroy(() => {
+    mounted = false;
     if (saveHandle) clearTimeout(saveHandle);
     saveDraft($state.snapshot(form) as LogDraft);
-    if (undoTimer) clearTimeout(undoTimer);
   });
 
   // --- prefill ---
@@ -105,16 +121,17 @@
         { brand: o.brand, name: o.name, method: form.method },
         form.grinderSetting,
       ),
+      sourceKey: '',
+      recipeId: undefined,
     });
-    form.sourceKey = '';
-    form.recipeId = undefined;
     newBean = false;
   }
 
   function startNewBean() {
-    Object.assign(form, { beanId: '', brand: '', name: '', origin: '', roastLevel: 'medium' });
-    form.sourceKey = '';
-    form.recipeId = undefined;
+    Object.assign(form, {
+      beanId: '', brand: '', name: '', origin: '', roastLevel: 'medium',
+      sourceKey: '', recipeId: undefined,
+    });
     newBean = true;
   }
 
@@ -124,7 +141,6 @@
    * directly rather than coming through here, so it never clobbers itself.
    */
   function changeMethod(m: BrewMethod) {
-    form.method = m;
     Object.assign(
       form,
       defaultsFor(
@@ -132,11 +148,14 @@
         { brand: form.brand, name: form.name, method: m },
         form.grinderSetting,
       ),
+      { sourceKey: '' },
     );
   }
 
   // --- save ---
   const num = (v: number, fallback: number) => (Number.isFinite(v) ? v : fallback);
+  /** 0.5 g doses mustn't leave 126.49999 g in the bag. */
+  const round1 = (v: number) => Math.round(v * 10) / 10;
 
   async function save() {
     saving = true;
@@ -146,7 +165,7 @@
     const waterMl = num(form.waterMl, 0);
 
     const brew: Brew = {
-      id: generateId(),
+      id: newId(),
       timestamp: new Date(form.brewDate).getTime() || Date.now(),
       beans: {
         brand: form.brand,
@@ -158,7 +177,7 @@
       grinder: { setting: num(form.grinderSetting, 60), notes: form.grinderNotes },
       method: form.method,
       water: { amountMl: waterMl, tempCelsius: num(form.waterTemp, 93) },
-      bloomDurationSeconds: form.bloomSeconds,
+      bloomDurationSeconds: showBloom ? form.bloomSeconds : 0,
       durationSeconds: totalSeconds,
       rating: form.rating,
       notes: form.notes,
@@ -168,23 +187,20 @@
 
     await addBrew(brew);
 
-    // Deduct from inventory whenever the bean is a linked inventory entry — no
-    // longer gated behind a checkbox, so a repeat-card prefill deducts too.
-    const bean = form.beanId ? appState.beans.find((b) => b.id === form.beanId) : undefined;
+    // Deduct from inventory whenever the bean is a linked inventory entry, so a
+    // repeat-card prefill deducts too.
+    const bean = inventoryBean;
     let deducted = 0;
     if (bean) {
       deducted = Math.min(bean.remainingGrams, amountGrams);
-      await updateBean({ ...bean, remainingGrams: bean.remainingGrams - deducted });
+      await putBean({ ...bean, remainingGrams: round1(bean.remainingGrams - deducted) });
       await refreshBeans();
     }
 
     await refreshBrews();
     saving = false;
 
-    lastSaved = { brew, beanId: bean?.id ?? '', grams: deducted };
-    if (undoTimer) clearTimeout(undoTimer);
-    undoTimer = setTimeout(() => (lastSaved = null), 5000);
-
+    toastUndo('Brew saved', () => undo(brew, bean?.id ?? '', deducted));
     resetForNext();
   }
 
@@ -201,54 +217,48 @@
     });
   }
 
-  async function undo() {
-    if (!lastSaved) return;
-    const { brew, beanId, grams } = lastSaved;
-    lastSaved = null;
-    if (undoTimer) clearTimeout(undoTimer);
-
+  async function undo(brew: Brew, beanId: string, grams: number) {
     await deleteBrew(brew.id);
     if (beanId && grams > 0) {
       const bean = appState.beans.find((b) => b.id === beanId);
       if (bean) {
-        await updateBean({ ...bean, remainingGrams: bean.remainingGrams + grams });
+        await putBean({ ...bean, remainingGrams: round1(bean.remainingGrams + grams) });
         await refreshBeans();
       }
     }
     await refreshBrews();
 
-    // Put the brew back in the form so it isn't simply lost.
-    Object.assign(form, {
+    // Put the brew back in the form so it isn't simply lost — via the draft if
+    // the user has already left the page.
+    const restored = {
       rating: brew.rating,
       notes: brew.notes,
       bloomSeconds: brew.bloomDurationSeconds,
       brewSeconds: Math.max(0, brew.durationSeconds - brew.bloomDurationSeconds),
-    });
+    };
+    if (mounted) Object.assign(form, restored);
+    else saveDraft(draftFromValues(brewToValues(brew), { ...restored, beanId }));
   }
 </script>
 
 <div class="page log-page">
-  {#if lastSaved}
-    <div class="toast">
-      <span>Brew saved</span>
-      <button class="undo" onclick={undo}>Undo</button>
-    </div>
-  {/if}
+  <PageHeader title="New brew" subtitle={today} />
 
-  <SetupStrip setups={setups} activeKey={form.sourceKey} onpick={applySetup} />
+  <SetupStrip {setups} activeKey={form.sourceKey} onpick={applySetup} />
 
   <section class="section compact">
     <span class="label">Bean</span>
     <BeanPicker
       options={beanOpts}
       selectedKey={newBean ? '' : selectedBeanKey}
+      adding={newBean}
       onpick={pickBean}
       onnew={startNewBean}
     />
-    {#if newBean || (!form.brand && !form.name)}
-      <div class="row2">
-        <input class="input" placeholder="Brand" bind:value={form.brand} />
-        <input class="input" placeholder="Name / blend" bind:value={form.name} />
+    {#if newBean}
+      <div class="grid-2">
+        <input class="input" placeholder="Roaster" bind:value={form.brand} />
+        <input class="input" placeholder="Bean / blend" bind:value={form.name} />
       </div>
     {/if}
 
@@ -257,151 +267,128 @@
   </section>
 
   <section class="section compact">
-    <div class="row-dose">
-      <Stepper label="Dose" bind:value={form.amountGrams} step={0.5} coarse={2} min={1} max={100} unit="g" decimals={1} />
-      <Stepper label="Water" bind:value={form.waterMl} step={5} coarse={25} min={10} max={2000} unit="ml" />
-      <div class="ratio-badge">
-        <span class="ratio-label">Ratio</span>
-        <span class="ratio-value">{ratio}</span>
-      </div>
+    <div class="section-head">
+      <span class="label">Recipe</span>
+      <span class="ratio num"><small>ratio</small> {ratio}</span>
     </div>
+    <Stepper label="Dose" bind:value={form.amountGrams} step={0.5} coarse={2} min={1} max={100} unit="g" decimals={1} />
+    <Stepper label="Water" bind:value={form.waterMl} step={5} coarse={25} min={10} max={2000} unit="ml" />
+    {#if inventoryBean}
+      <p class="hint stock num">
+        {inventoryBean.remainingGrams}g left in the bag{inventoryBean.remainingGrams >= form.amountGrams
+          ? ` → ${round1(inventoryBean.remainingGrams - form.amountGrams)}g after this brew`
+          : ' — not enough for this dose'}
+      </p>
+    {/if}
+  </section>
 
-    <span class="label">Grinder (Kingrinder K2)</span>
+  <section class="section compact">
+    <span class="label">Grind · Kingrinder K2</span>
     <GrinderSlider bind:value={form.grinderSetting} />
   </section>
 
   <section class="section compact">
-    <span class="label">Rating</span>
-    <RatingInput bind:value={form.rating} compact />
+    <RatingInput bind:value={form.rating} />
   </section>
 
-  <button class="disclosure" onclick={() => (form.showMore = !form.showMore)}>
-    <span>More details</span>
-    <span class="chevron" class:open={form.showMore}>›</span>
-  </button>
+  <section class="section compact more" class:open={form.showMore}>
+    <button class="disclosure" onclick={() => (form.showMore = !form.showMore)} aria-expanded={form.showMore}>
+      <span class="label">More details</span>
+      <span class="more-summary num">{form.showMore ? '' : moreSummary}</span>
+      <span class="chev"><Icon name="chevronDown" size={18} /></span>
+    </button>
 
-  {#if form.showMore}
-    <section class="section compact">
-      <div class="row2">
-        <input class="input" placeholder="Origin" bind:value={form.origin} />
-        <select class="select" bind:value={form.roastLevel}>
-          {#each ROAST_LEVELS as r}
-            <option value={r.value}>{r.label}</option>
-          {/each}
-        </select>
-      </div>
-      <Stepper label="Water temp" bind:value={form.waterTemp} step={1} coarse={5} min={20} max={100} unit="°C" />
-      <input class="input" placeholder="Grinder notes" bind:value={form.grinderNotes} />
+    {#if form.showMore}
+      <Stepper label="Water temp" bind:value={form.waterTemp} step={1} coarse={5} min={1} max={100} unit="°C" />
 
-      <span class="label">Timing</span>
       {#if showBloom}
         <Timer label="Bloom" bind:value={form.bloomSeconds} />
       {/if}
       <Timer label="Brew" bind:value={form.brewSeconds} />
       {#if showBloom && totalSeconds > 0}
-        <div class="total-badge">
-          Total: {Math.floor(totalSeconds / 60)}:{String(totalSeconds % 60).padStart(2, '0')}
-        </div>
+        <p class="hint total num">Total {formatClock(totalSeconds)}</p>
       {/if}
 
-      <span class="label">Notes</span>
-      <textarea class="textarea" rows="3" placeholder="Tasting notes, observations..." bind:value={form.notes}></textarea>
+      <textarea class="textarea" rows="3" placeholder="Tasting notes — sweet, bright, bitter finish…" bind:value={form.notes}></textarea>
 
-      <label class="field-label" for="brew-date">Date &amp; Time</label>
-      <input
-        id="brew-date"
-        class="input"
-        type="datetime-local"
-        bind:value={form.brewDate}
-        oninput={() => (form.dateTouched = true)}
-      />
-    </section>
-  {/if}
+      <div class="grid-2">
+        <input class="input" placeholder="Origin" bind:value={form.origin} />
+        <select class="select" bind:value={form.roastLevel} aria-label="Roast level">
+          {#each ROAST_LEVELS as r (r.value)}
+            <option value={r.value}>{r.label} roast</option>
+          {/each}
+        </select>
+      </div>
+      <input class="input" placeholder="Grinder notes" bind:value={form.grinderNotes} />
+
+      <div class="field">
+        <label class="label" for="brew-date">Brewed at</label>
+        <input
+          id="brew-date"
+          class="input"
+          type="datetime-local"
+          bind:value={form.brewDate}
+          oninput={() => (form.dateTouched = true)}
+        />
+      </div>
+    {/if}
+  </section>
 
   <div class="save-bar">
-    <div class="save-readout">
-      <span class="readout-main">{form.amountGrams}g · {form.waterMl}ml</span>
-      <span class="readout-sub">{ratio}</span>
+    <div class="save-readout num">
+      <span class="readout-main">{form.amountGrams}g → {form.waterMl}ml</span>
+      <span class="readout-sub">{ratio} · {form.grinderSetting} clicks{form.rating ? ` · ${form.rating}/10` : ''}</span>
     </div>
     <button class="btn btn-primary save-btn" onclick={save} disabled={saving}>
-      {saving ? 'Saving…' : 'Save Brew'}
+      {saving ? 'Saving…' : 'Save brew'}
     </button>
   </div>
 </div>
 
 <style>
-  .log-page {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .row2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-  }
-  .row-dose {
-    display: grid;
-    grid-template-columns: 1fr 1fr auto;
-    gap: 0.5rem;
-    align-items: end;
-  }
-  .ratio-badge {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface-2);
-    border-radius: 10px;
-    padding: 0.35rem 0.5rem;
-    min-height: 2.75rem;
-  }
-  .ratio-label {
-    font-size: 0.6rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-  }
-  .ratio-value {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--primary-light);
-    font-variant-numeric: tabular-nums;
-  }
-  .total-badge {
-    font-size: 0.8rem;
-    color: var(--primary-light);
-    font-weight: 600;
-    text-align: center;
-    padding: 0.3rem;
-    background: var(--surface-2);
-    border-radius: 8px;
-  }
-  .field-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
+  .log-page { padding-bottom: 0; }
 
+  .ratio {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 500;
+    color: var(--accent-2);
+  }
+  .ratio small {
+    font-family: var(--font);
+    font-size: 0.72rem;
+    color: var(--text-3);
+    margin-right: 4px;
+  }
+  .stock { padding-top: 2px; }
+  .total { text-align: right; color: var(--text-2); }
+
+  .more { gap: 12px; }
   .disclosure {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 10px;
     width: 100%;
-    padding: 0.6rem 1rem;
+    margin: -4px 0;
+    padding: 4px 0;
     background: none;
     border: none;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    font-weight: 600;
-    font-family: inherit;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    text-align: left;
     cursor: pointer;
   }
-  .chevron {
-    font-size: 1.2rem;
-    transition: transform 0.2s;
+  .more-summary {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    font-size: 0.8rem;
+    color: var(--text-3);
   }
-  .chevron.open { transform: rotate(90deg); }
+  .chev { color: var(--text-3); transition: transform 0.2s; }
+  .more.open .chev { transform: rotate(180deg); }
+  .more.open .more-summary { visibility: hidden; }
 
   /* .app-main is the scroll container, so this pins directly above the bottom nav.
      Solid background rather than a blur — iOS flickers sticky compositing layers. */
@@ -409,60 +396,21 @@
     position: sticky;
     bottom: 0;
     z-index: 5;
-    margin: 0.25rem -0.75rem -0.75rem;
-    padding: 0.6rem 0.75rem;
+    margin: 4px calc(-1 * var(--gutter)) 0;
+    padding: 12px var(--gutter);
     background: var(--bg);
-    box-shadow: 0 -10px 14px -8px rgba(0, 0, 0, 0.7);
+    border-top: 1px solid var(--line);
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 14px;
   }
   .save-readout {
     display: flex;
     flex-direction: column;
-    line-height: 1.2;
+    min-width: 0;
+    line-height: 1.25;
   }
-  .readout-main {
-    font-size: 0.85rem;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-  .readout-sub {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-  }
-  .save-btn {
-    flex: 1;
-    padding: 0.85rem;
-    font-size: 1rem;
-    border-radius: 12px;
-  }
-
-  .toast {
-    position: fixed;
-    top: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    background: var(--primary);
-    color: #1a1008;
-    font-weight: 700;
-    padding: 0.5rem 0.75rem 0.5rem 1.25rem;
-    border-radius: 999px;
-    z-index: 100;
-  }
-  .undo {
-    background: rgba(0, 0, 0, 0.18);
-    border: none;
-    border-radius: 999px;
-    padding: 0.3rem 0.8rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    font-family: inherit;
-    color: #1a1008;
-    cursor: pointer;
-  }
+  .readout-main { font-size: 0.95rem; font-weight: 600; white-space: nowrap; }
+  .readout-sub { font-size: 0.75rem; color: var(--text-3); white-space: nowrap; }
+  .save-btn { flex: 1; min-height: 52px; font-size: 1rem; }
 </style>

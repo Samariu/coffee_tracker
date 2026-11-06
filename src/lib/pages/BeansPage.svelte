@@ -1,240 +1,213 @@
 <script lang="ts">
+  import Sheet from '../components/Sheet.svelte';
+  import Icon from '../components/Icon.svelte';
+  import PageHeader from '../components/PageHeader.svelte';
+  import Stepper from '../components/Stepper.svelte';
   import { appState, refreshBeans } from '../stores.svelte';
-  import { addBean, updateBean, deleteBean } from '../db';
-  import { generateId, ROAST_LEVELS, formatDate } from '../utils';
-  import type { Bean, RoastLevel } from '../types';
+  import { deleteBean, newId, putBean } from '../db';
+  import { toastUndo } from '../toast.svelte';
+  import { ROAST_LEVELS, roastLabel } from '../constants';
+  import { beanTitle, plural } from '../format';
+  import { lastBrewFor } from '../setups';
+  import type { Bean } from '../types';
 
-  let showForm = $state(false);
-  let editingId = $state<string | null>(null);
+  const today = () => new Date().toISOString().slice(0, 10);
 
-  let brand = $state('');
-  let name = $state('');
-  let origin = $state('');
-  let roastLevel = $state<RoastLevel>('medium');
-  let initialAmount = $state(250);
-  let purchaseDate = $state(new Date().toISOString().slice(0, 10));
-  let beanNotes = $state('');
+  interface BeanForm {
+    id: string | null;
+    brand: string;
+    name: string;
+    origin: string;
+    roastLevel: Bean['roastLevel'];
+    initialAmountGrams: number;
+    remainingGrams: number;
+    purchaseDate: string;
+    notes: string;
+  }
+
+  let sheetOpen = $state(false);
+  let form = $state<BeanForm>(blankForm());
+
+  function blankForm(): BeanForm {
+    return {
+      id: null, brand: '', name: '', origin: '', roastLevel: 'medium',
+      initialAmountGrams: 250, remainingGrams: 250, purchaseDate: today(), notes: '',
+    };
+  }
+
+  /** Stocked bags first, then by how recently they were bought. */
+  let beans = $derived(
+    appState.beans
+      .slice()
+      .sort((a, b) => Number(b.remainingGrams > 0) - Number(a.remainingGrams > 0) || b.purchaseDate - a.purchaseDate),
+  );
+  let totalGrams = $derived(appState.beans.reduce((s, b) => s + b.remainingGrams, 0));
 
   function openAdd() {
-    editingId = null;
-    brand = ''; name = ''; origin = ''; roastLevel = 'medium';
-    initialAmount = 250; purchaseDate = new Date().toISOString().slice(0, 10); beanNotes = '';
-    showForm = true;
+    form = blankForm();
+    sheetOpen = true;
   }
 
   function openEdit(b: Bean) {
-    editingId = b.id;
-    brand = b.brand; name = b.name; origin = b.origin; roastLevel = b.roastLevel as RoastLevel;
-    initialAmount = b.initialAmountGrams;
-    purchaseDate = new Date(b.purchaseDate).toISOString().slice(0, 10);
-    beanNotes = b.notes;
-    showForm = true;
+    form = { ...b, purchaseDate: new Date(b.purchaseDate).toISOString().slice(0, 10) };
+    sheetOpen = true;
   }
+
+  let canSave = $derived(Boolean(form.brand.trim() || form.name.trim()));
 
   async function save() {
-    if (!brand || !name) return;
-    if (editingId) {
-      const existing = appState.beans.find((b) => b.id === editingId)!;
-      const usedGrams = existing.initialAmountGrams - existing.remainingGrams;
-      await updateBean({
-        ...existing,
-        brand, name, origin, roastLevel,
-        initialAmountGrams: initialAmount,
-        remainingGrams: Math.max(0, initialAmount - usedGrams),
-        purchaseDate: new Date(purchaseDate).getTime(),
-        notes: beanNotes,
-      });
-    } else {
-      await addBean({
-        id: generateId(),
-        brand, name, origin, roastLevel,
-        initialAmountGrams: initialAmount,
-        remainingGrams: initialAmount,
-        purchaseDate: new Date(purchaseDate).getTime(),
-        notes: beanNotes,
-      });
-    }
+    const { id, purchaseDate, ...rest } = form;
+    await putBean({
+      ...rest,
+      id: id ?? newId(),
+      // A new bag starts full; an edit keeps whatever the stepper says is left.
+      remainingGrams: id ? Math.min(form.remainingGrams, form.initialAmountGrams) : form.initialAmountGrams,
+      purchaseDate: new Date(purchaseDate).getTime() || Date.now(),
+    });
     await refreshBeans();
-    showForm = false;
+    sheetOpen = false;
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Remove this bean from inventory?')) return;
-    await deleteBean(id);
+  async function remove() {
+    const found = appState.beans.find((b) => b.id === form.id);
+    if (!found) return;
+    // A plain copy: IndexedDB can't clone the $state proxy when Undo puts it back.
+    const bean = $state.snapshot(found) as Bean;
+    sheetOpen = false;
+    await deleteBean(bean.id);
     await refreshBeans();
+    toastUndo('Bean removed', async () => {
+      await putBean(bean);
+      await refreshBeans();
+    });
   }
 
-  function stockPercent(b: Bean): number {
-    return Math.round((b.remainingGrams / b.initialAmountGrams) * 100);
+  /** Brews left at your usual dose for this bean. */
+  function brewsLeft(b: Bean): number {
+    const dose = lastBrewFor(appState.brews, { brand: b.brand, name: b.name })?.beans.amountGrams || 15;
+    return Math.floor(b.remainingGrams / dose);
   }
+
+  function daysSince(ts: number): number {
+    return Math.max(0, Math.floor((Date.now() - ts) / 86_400_000));
+  }
+
+  const roastIndex = (r: Bean['roastLevel']) => ROAST_LEVELS.findIndex((x) => x.value === r);
 </script>
 
 <div class="page">
-  <div class="page-header">
-    <span class="page-title">Bean Inventory</span>
-    <button class="btn btn-primary btn-sm" onclick={openAdd}>+ Add Bean</button>
-  </div>
+  <PageHeader title="Beans" subtitle={appState.beans.length ? `${totalGrams}g on the shelf` : ''}>
+    {#snippet actions()}
+      <button class="btn btn-sm btn-primary" onclick={openAdd}><Icon name="plus" size={16} />Add</button>
+    {/snippet}
+  </PageHeader>
 
-  {#if appState.beans.length === 0}
+  {#if beans.length === 0}
     <div class="empty">
-      <p>No beans in inventory.</p>
-      <p class="muted">Track your bags to monitor stock levels.</p>
+      <Icon name="bean" size={32} stroke={1.4} />
+      <h3>Shelf's empty</h3>
+      <p>Add a bag and each brew deducts its dose, so you know when to restock.</p>
+      <button class="btn btn-primary" onclick={openAdd}>Add a bag</button>
     </div>
   {:else}
-    <div class="bean-list">
-      {#each appState.beans as b (b.id)}
-        {@const pct = stockPercent(b)}
-        <div class="bean-card" class:low={pct < 20}>
-          <div class="bean-main">
-            <div class="bean-info">
-              <span class="bean-name">{b.brand} — {b.name}</span>
-              <span class="bean-meta">{b.roastLevel} · {b.origin || 'Unknown origin'}</span>
-              {#if b.notes}<span class="bean-meta muted">{b.notes}</span>{/if}
-            </div>
-            <div class="bean-actions">
-              <button class="btn btn-ghost btn-sm" onclick={() => openEdit(b)}>Edit</button>
-              <button class="btn btn-danger btn-sm" onclick={() => handleDelete(b.id)}>×</button>
-            </div>
+    {#each beans as b (b.id)}
+      {@const pct = b.initialAmountGrams ? Math.round((b.remainingGrams / b.initialAmountGrams) * 100) : 0}
+      {@const left = brewsLeft(b)}
+      <button class="bean" class:empty-bag={b.remainingGrams <= 0} onclick={() => openEdit(b)}>
+        <div class="top">
+          <div class="titles">
+            <span class="brand">{b.brand || 'Unknown roaster'}</span>
+            <span class="name">{b.name || 'Unnamed'}</span>
           </div>
-          <div class="stock">
-            <div class="stock-bar">
-              <div class="stock-fill" style="width:{pct}%" class:low={pct < 20}></div>
-            </div>
-            <span class="stock-text">{b.remainingGrams}g / {b.initialAmountGrams}g</span>
-          </div>
-          <span class="bean-date">Purchased {formatDate(b.purchaseDate)}</span>
-        </div>
-      {/each}
-    </div>
-  {/if}
-
-  <!-- Add / Edit form modal -->
-  {#if showForm}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-overlay" onclick={() => (showForm = false)} onkeydown={() => {}}>
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="modal" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-        <h2 class="modal-title">{editingId ? 'Edit Bean' : 'Add Bean'}</h2>
-
-        <div class="row2">
-          <input class="input" placeholder="Brand *" bind:value={brand} />
-          <input class="input" placeholder="Name / blend *" bind:value={name} />
-        </div>
-        <div class="row2">
-          <input class="input" placeholder="Origin" bind:value={origin} />
-          <select class="select" bind:value={roastLevel}>
-            {#each ROAST_LEVELS as r}
-              <option value={r.value}>{r.label}</option>
+          <div class="roast" title="{roastLabel(b.roastLevel)} roast">
+            {#each ROAST_LEVELS as r, i (r.value)}
+              <span class="dot" class:on={i <= roastIndex(b.roastLevel)}></span>
             {/each}
-          </select>
-        </div>
-        <div class="row2">
-          <div class="input-unit">
-            <input class="input" type="number" min="1" max="5000" bind:value={initialAmount} />
-            <span class="unit">g</span>
           </div>
-          <input class="input" type="date" bind:value={purchaseDate} />
         </div>
-        <textarea class="textarea" rows="2" placeholder="Notes (optional)" bind:value={beanNotes}></textarea>
 
-        <div class="modal-footer">
-          <button class="btn btn-ghost" onclick={() => (showForm = false)}>Cancel</button>
-          <button class="btn btn-primary" onclick={save} disabled={!brand || !name}>Save</button>
+        <div class="track"><div class="fill" class:low={pct < 20} style:width="{pct}%"></div></div>
+
+        <div class="facts num">
+          <span><b>{b.remainingGrams}g</b> of {b.initialAmountGrams}g</span>
+          <span class:warn={left <= 2}>
+            {b.remainingGrams <= 0 ? 'Finished' : `~${plural(left, 'brew')} left`}
+          </span>
         </div>
-      </div>
-    </div>
+        <div class="pills">
+          {#if b.origin}<span class="pill">{b.origin}</span>{/if}
+          <span class="pill">{roastLabel(b.roastLevel)} roast</span>
+          <span class="pill">opened {daysSince(b.purchaseDate)}d ago</span>
+        </div>
+      </button>
+    {/each}
   {/if}
 </div>
 
+<Sheet bind:open={sheetOpen} title={form.id ? beanTitle(form.brand, form.name) : 'New bag'}>
+  <div class="grid-2">
+    <input class="input" placeholder="Roaster" bind:value={form.brand} />
+    <input class="input" placeholder="Bean / blend" bind:value={form.name} />
+  </div>
+  <div class="grid-2">
+    <input class="input" placeholder="Origin" bind:value={form.origin} />
+    <select class="select" bind:value={form.roastLevel} aria-label="Roast level">
+      {#each ROAST_LEVELS as r (r.value)}<option value={r.value}>{r.label} roast</option>{/each}
+    </select>
+  </div>
+  <Stepper label="Bag size" bind:value={form.initialAmountGrams} step={10} coarse={50} min={1} max={5000} unit="g" />
+  {#if form.id}
+    <Stepper label="Left" bind:value={form.remainingGrams} step={1} coarse={10} min={0} max={form.initialAmountGrams} unit="g" />
+  {/if}
+  <div class="field">
+    <label class="label" for="bean-date">Bought / opened</label>
+    <input id="bean-date" class="input" type="date" bind:value={form.purchaseDate} />
+  </div>
+  <textarea class="textarea" rows="2" placeholder="Notes — tasting notes on the bag, process…" bind:value={form.notes}></textarea>
+
+  {#snippet footer()}
+    {#if form.id}
+      <button class="icon-btn danger" onclick={remove} aria-label="Remove bean"><Icon name="trash" size={18} /></button>
+    {/if}
+    <button class="btn btn-ghost" onclick={() => (sheetOpen = false)}>Cancel</button>
+    <button class="btn btn-primary" onclick={save} disabled={!canSave}>Save</button>
+  {/snippet}
+</Sheet>
+
 <style>
-  .page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .page-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .bean-list {
+  .bean {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-  }
-  .bean-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 0.9rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    transition: border-color 0.2s;
-  }
-  .bean-card.low { border-color: #c07030; }
-  .bean-main {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-  .bean-info { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
-  .bean-name { font-weight: 600; color: var(--text); font-size: 0.95rem; }
-  .bean-meta { font-size: 0.75rem; color: var(--text-muted); }
-  .bean-meta.muted { font-style: italic; }
-  .bean-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
-  .stock { display: flex; align-items: center; gap: 0.75rem; }
-  .stock-bar { flex: 1; height: 6px; background: var(--surface-3); border-radius: 3px; }
-  .stock-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s; }
-  .stock-fill.low { background: #c07030; }
-  .stock-text { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
-  .bean-date { font-size: 0.72rem; color: var(--text-muted); }
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    display: flex;
-    align-items: flex-end;
-    z-index: 50;
-  }
-  .modal {
+    gap: 12px;
     width: 100%;
+    padding: 16px;
+    text-align: left;
     background: var(--surface);
-    border-radius: 20px 20px 0 0;
-    padding: 1.5rem 1rem calc(1.5rem + var(--safe-bottom));
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: transform 0.1s;
   }
-  .modal-title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text);
-    margin: 0 0 0.25rem;
+  .bean:active { transform: scale(0.99); }
+  .bean.empty-bag { opacity: 0.55; }
+  .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .brand { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+  .name {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
   }
-  .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
-  }
-  .row2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-  }
-  .input-unit { position: relative; display: flex; align-items: center; }
-  .input-unit .input { padding-right: 2rem; }
-  .input-unit .unit {
-    position: absolute; right: 0.6rem;
-    font-size: 0.75rem; color: var(--text-muted); pointer-events: none;
-  }
-  .empty {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--text-muted);
-  }
-  .empty p { margin: 0.25rem 0; }
-  .muted { font-size: 0.85rem; }
+  .roast { display: flex; gap: 3px; padding-top: 4px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--surface-3); }
+  .dot.on { background: #a0693c; }
+  .track { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.3s; }
+  .fill.low { background: var(--danger); }
+  .facts { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--text-2); }
+  .facts b { color: var(--text); font-weight: 600; }
+  .warn { color: var(--warn); }
+  .icon-btn.danger { width: 44px; height: 44px; background: var(--danger-soft); color: var(--danger); }
 </style>

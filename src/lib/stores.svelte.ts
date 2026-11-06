@@ -1,25 +1,28 @@
 import { getAllBrews, getAllBeans, getAllRecipes } from './db';
+import { ALL_METHODS } from './constants';
 import type { Brew, Bean, Recipe, BrewMethod } from './types';
 
 export type Page = 'log' | 'history' | 'stats' | 'beans' | 'recipes' | 'settings';
 
-const ALL_METHODS: BrewMethod[] = [
-  'v60', 'french_press', 'aeropress', 'moka_pot', 'chemex', 'cold_brew', 'espresso', 'other',
-];
+const METHODS_KEY = 'enabled_methods';
 
 function loadEnabledMethods(): BrewMethod[] {
   try {
-    const saved = localStorage.getItem('enabled_methods');
-    if (saved) return JSON.parse(saved) as BrewMethod[];
+    const saved = JSON.parse(localStorage.getItem(METHODS_KEY) ?? 'null');
+    if (Array.isArray(saved)) {
+      const valid = saved.filter((m): m is BrewMethod => ALL_METHODS.includes(m));
+      if (valid.length) return valid;
+    }
   } catch {}
   return [...ALL_METHODS];
 }
 
-export function saveEnabledMethods(methods: BrewMethod[]) {
-  localStorage.setItem('enabled_methods', JSON.stringify(methods));
+export function setEnabledMethods(methods: BrewMethod[]) {
+  appState.enabledMethods = methods;
+  try {
+    localStorage.setItem(METHODS_KEY, JSON.stringify(methods));
+  } catch {}
 }
-
-export { ALL_METHODS };
 
 export const swState = $state({
   updateAvailable: false,
@@ -49,6 +52,10 @@ export const appState = $state({
   dbReady: false,
   enabledMethods: loadEnabledMethods(),
 });
+
+export function go(page: Page) {
+  appState.page = page;
+}
 
 export async function refreshBrews() {
   appState.brews = await getAllBrews();
