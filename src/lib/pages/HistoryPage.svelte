@@ -3,7 +3,8 @@
   import RatingInput from '../components/RatingInput.svelte';
   import { appState, refreshBrews } from '../stores.svelte';
   import { deleteBrew, updateBrew } from '../db';
-  import { BREW_METHODS, BREW_METHOD_ICONS, brewsToCSV, downloadCSV, formatDate, ROAST_LEVELS, formatGrindSetting } from '../utils';
+  import { draftFromValues, saveDraft } from '../draft';
+  import { BREW_METHODS, BREW_METHOD_ICONS, brewsToCSV, brewToValues, downloadCSV, findInventoryBean, formatDate, ROAST_LEVELS, formatGrindSetting } from '../utils';
   import type { Brew, BrewMethod, RoastLevel } from '../types';
 
   let search = $state('');
@@ -92,6 +93,13 @@
   }
 
   const methods = Object.entries(BREW_METHODS) as [BrewMethod, string][];
+  /** Send this brew back to the Log page prefilled — one tap to brew it again. */
+  function repeatBrew(brew: Brew) {
+    const bean = findInventoryBean(appState.beans, brew.beans.brand, brew.beans.name);
+    saveDraft(draftFromValues(brewToValues(brew), { beanId: bean?.id ?? '' }));
+    appState.page = 'log';
+  }
+
 </script>
 
 <div class="page">
@@ -132,7 +140,7 @@
   {:else}
     <div class="brew-list">
       {#each filtered as brew (brew.id)}
-        <BrewCard {brew} onDelete={handleDelete} onEdit={openEdit} />
+        <BrewCard {brew} onDelete={handleDelete} onEdit={openEdit} onRepeat={repeatBrew} />
       {/each}
     </div>
   {/if}

@@ -1,9 +1,12 @@
 <script lang="ts">
-  let { value = $bindable(0) }: { value?: number } = $props();
+  let {
+    value = $bindable(0),
+    compact = false,
+  }: { value?: number; compact?: boolean } = $props();
 </script>
 
-<div class="rating">
-  {#if value === 0}
+<div class="rating" class:compact>
+  {#if value === 0 && !compact}
     <span class="unrated">tap to rate</span>
   {/if}
   {#each { length: 10 } as _, i}
@@ -30,6 +33,12 @@
     color: var(--text-muted);
     font-style: italic;
     margin-right: 0.25rem;
+  }
+  .rating.compact { gap: 0.25rem; }
+  .rating.compact .pip {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
   }
   .pip {
     width: 2.4rem;

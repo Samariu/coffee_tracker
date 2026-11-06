@@ -6,10 +6,12 @@
     brew,
     onDelete,
     onEdit,
+    onRepeat,
   }: {
     brew: Brew;
     onDelete: (id: string) => void;
     onEdit: (id: string) => void;
+    onRepeat: (brew: Brew) => void;
   } = $props();
 
   let expanded = $state(false);
@@ -76,6 +78,7 @@
       {/if}
 
       <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick={() => onRepeat(brew)}>Repeat</button>
         <button class="btn btn-ghost btn-sm" onclick={() => onEdit(brew.id)}>Edit</button>
         <button class="btn btn-danger btn-sm" onclick={() => onDelete(brew.id)}>Delete</button>
       </div>

@@ -63,3 +63,60 @@ export interface Recipe {
   notes: string;
   createdAt: number;
 }
+
+/** The prefillable core of a brew — everything a "repeat this setup" action fills in. */
+export interface SetupValues {
+  brand: string;
+  name: string;
+  origin: string;
+  roastLevel: RoastLevel;
+  amountGrams: number;
+  grinderSetting: number;
+  method: BrewMethod;
+  waterMl: number;
+  waterTemp: number;
+  bloomSeconds: number;
+}
+
+/** A one-tap starting point on the Log page: a past bean+method combo, or a saved recipe. */
+export interface Setup {
+  key: string;
+  source: 'history' | 'recipe';
+  title: string;
+  method: BrewMethod;
+  values: SetupValues;
+  count: number;
+  lastUsed: number;
+  lastRating: number;
+  recipeId?: string;
+}
+
+/** A bean offered as a chip — from inventory, or seen in brew history. */
+export interface BeanOption {
+  key: string;
+  /** Inventory id, or '' for a history-only bean (no inventory to deduct from). */
+  beanId: string;
+  brand: string;
+  name: string;
+  origin: string;
+  roastLevel: RoastLevel;
+  remainingGrams: number | null;
+  lastUsed: number;
+}
+
+/** The whole Log form, persisted so it survives navigation and the OS killing the PWA. */
+export interface LogDraft extends SetupValues {
+  beanId: string;
+  grinderNotes: string;
+  brewSeconds: number;
+  rating: number;
+  notes: string;
+  /** datetime-local value */
+  brewDate: string;
+  dateTouched: boolean;
+  recipeId?: string;
+  /** Key of the highlighted setup card, '' if none. */
+  sourceKey: string;
+  showMore: boolean;
+  savedAt: number;
+}

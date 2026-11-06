@@ -9,9 +9,9 @@
   }: { value?: BrewMethod; onchange?: (m: BrewMethod) => void } = $props();
 
   // Sort enabled methods by most-recently-brewed first
-  let sortedMethods = $derived(() => {
+  let sortedMethods = $derived.by(() => {
     const lastUsed = new Map<BrewMethod, number>();
-    for (const brew of appState.brews) {
+    for (const brew of appState.brews.slice(0, 50)) {
       const cur = lastUsed.get(brew.method) ?? 0;
       if (brew.timestamp > cur) lastUsed.set(brew.method, brew.timestamp);
     }
@@ -23,13 +23,13 @@
   // If the currently selected method gets disabled, pick the first enabled one
   $effect(() => {
     if (!appState.enabledMethods.includes(value) && appState.enabledMethods.length > 0) {
-      value = sortedMethods()[0];
+      value = sortedMethods[0];
     }
   });
 </script>
 
 <div class="method-grid">
-  {#each sortedMethods() as key (key)}
+  {#each sortedMethods as key (key)}
     <button
       class="method-btn"
       class:selected={value === key}

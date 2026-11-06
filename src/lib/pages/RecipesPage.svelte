@@ -1,7 +1,15 @@
 <script lang="ts">
-  import { appState, refreshRecipes, refreshBrews } from '../stores.svelte';
-  import { addRecipe, updateRecipe, deleteRecipe, addBrew } from '../db';
-  import { generateId, BREW_METHODS, BREW_METHOD_ICONS, formatGrindSetting, brewRatio } from '../utils';
+  import { appState, refreshRecipes } from '../stores.svelte';
+  import { addRecipe, updateRecipe, deleteRecipe } from '../db';
+  import { draftFromValues, saveDraft } from '../draft';
+  import {
+    generateId,
+    recipeToValues,
+    BREW_METHODS,
+    BREW_METHOD_ICONS,
+    formatGrindSetting,
+    brewRatio,
+  } from '../utils';
   import type { Recipe, BrewMethod } from '../types';
 
   let showForm = $state(false);
@@ -66,23 +74,18 @@
     await refreshRecipes();
   }
 
-  async function brewFromRecipe(r: Recipe) {
-    await addBrew({
-      id: generateId(),
-      timestamp: Date.now(),
-      beans: { brand: r.beanBrand, name: r.beanName, origin: '', roastLevel: 'medium', amountGrams: r.amountGrams },
-      grinder: { setting: r.grinderSetting, notes: '' },
-      method: r.method,
-      water: { amountMl: r.waterAmountMl, tempCelsius: r.waterTempCelsius },
-      bloomDurationSeconds: r.bloomSeconds,
-      durationSeconds: 0,
-      rating: 0,
-      notes: `From recipe: ${r.name}`,
-      recipeId: r.id,
-      synced: false,
-    });
-    await refreshBrews();
-    appState.page = 'history';
+  /** Hand the recipe to the Log page as a draft rather than blind-saving a brew.
+   *  You still get to rate it, the roast/origin aren't invented, your notes survive,
+   *  and inventory gets deducted — all of which the old instant-save skipped. */
+  function brewFromRecipe(r: Recipe) {
+    saveDraft(
+      draftFromValues(recipeToValues(r), {
+        recipeId: r.id,
+        sourceKey: `recipe:${r.id}`,
+        notes: r.notes,
+      }),
+    );
+    appState.page = 'log';
   }
 
   const methods = Object.entries(BREW_METHODS) as [BrewMethod, string][];

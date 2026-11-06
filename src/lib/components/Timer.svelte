@@ -1,40 +1,43 @@
 <script lang="ts">
+  // `value` is bindable so the parent owns the seconds. That's what makes a parent
+  // reset actually reach the display, and what stops a still-running timer from
+  // being discarded on save.
   let {
     label = 'Timer',
-    onDone,
+    value = $bindable(0),
   }: {
     label?: string;
-    onDone: (seconds: number) => void;
+    value?: number;
   } = $props();
 
   let running = $state(false);
-  let seconds = $state(0);
   let startTime = 0;
   let handle: ReturnType<typeof setInterval> | null = null;
 
+  function clear() {
+    if (handle) clearInterval(handle);
+    handle = null;
+  }
+
   function start() {
     if (running) return;
-    // Offset by already-elapsed seconds so resume works correctly
-    startTime = Date.now() - seconds * 1000;
+    // Offset by already-elapsed seconds so resume works correctly.
+    startTime = Date.now() - value * 1000;
     running = true;
     handle = setInterval(() => {
-      seconds = Math.floor((Date.now() - startTime) / 1000);
+      value = Math.floor((Date.now() - startTime) / 1000);
     }, 250);
   }
 
   function stop() {
     if (!running) return;
     running = false;
-    if (handle) clearInterval(handle);
-    handle = null;
-    onDone(seconds);
+    clear();
   }
 
   function reset() {
-    running = false;
-    if (handle) clearInterval(handle);
-    handle = null;
-    seconds = 0;
+    stop();
+    value = 0;
   }
 
   function fmt(s: number): string {
@@ -43,19 +46,22 @@
     return `${m}:${sec.toString().padStart(2, '0')}`;
   }
 
-  // Re-sync immediately when tab regains focus (iOS throttles background intervals)
+  // Re-sync immediately when tab regains focus (iOS throttles background intervals).
   $effect(() => {
     function onVisible() {
-      if (running) seconds = Math.floor((Date.now() - startTime) / 1000);
+      if (running) value = Math.floor((Date.now() - startTime) / 1000);
     }
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   });
+
+  // Without this, navigating away mid-brew leaves the interval writing forever.
+  $effect(() => clear);
 </script>
 
 <div class="timer" class:running>
   <span class="timer-label">{label}</span>
-  <span class="timer-display">{fmt(seconds)}</span>
+  <span class="timer-display">{fmt(value)}</span>
   <div class="timer-btns">
     {#if !running}
       <button class="btn btn-primary" onclick={start}>Start</button>
