@@ -1,47 +1,50 @@
-# Svelte + TS + Vite
+# Coffee Tracker
 
-This template should help get you started developing with Svelte and TypeScript in Vite.
+A phone-first app for logging your coffee brews, tracking your beans, and dialling in your grinder. It's built for speed: once you've logged a brew, the next one is usually two taps.
 
-## Recommended IDE Setup
+It works offline, installs to your home screen like a native app, and keeps everything on your own device. There is no account and no server.
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+## What you can do
 
-## Need an official Svelte framework?
+- **Brew** – Log a brew in a couple of taps. The form starts pre-filled from your most recent brew, so you usually just rate it and save. One-tap cards offer your most-used setups and saved recipes. Saved a brew by mistake? Tap Undo in the confirmation toast.
+- **Journal** – Browse past brews grouped by day, open one to view or edit it, or hit "Brew again" to repeat it. Export your history as CSV.
+- **Insights** – See overall stats, rating trends, and how your beans and brew methods compare.
+- **Beans** – Keep an inventory of your beans. Remaining grams are deducted automatically when you log a brew with a bean from your inventory.
+- **Recipes** – Save reusable presets and start a brew from one.
+- **Grinder** – The grind setting is recorded as a click count (0–120) for a K2 grinder (40 clicks per rotation), shown as rotations plus clicks (for example "1R + 12").
+- **Methods** – V60, French Press, AeroPress, Moka Pot, Chemex, Cold Brew, Espresso, and Other. Choose which ones show up in Settings.
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+## Using it
 
-## Technical considerations
+Open the app in your phone's browser, then add it to your home screen:
 
-**Why use this over SvelteKit?**
+- **iPhone (Safari):** Share → *Add to Home Screen*
+- **Android (Chrome):** menu → *Install app* / *Add to Home screen*
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
+After the first load it works without a connection. When a new version is available the app offers a Reload button; Settings also lets you check for updates manually.
 
-This template contains as little as possible to get started with Vite + TypeScript + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
+## Your data
 
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
+Everything is stored locally in your browser (IndexedDB) on the device you use. That means:
 
-**Why `global.d.ts` instead of `compilerOptions.types` inside `jsconfig.json` or `tsconfig.json`?**
+- Nothing is uploaded anywhere, and the data does not sync between devices.
+- Clearing your browser or site data deletes it.
 
-Setting `compilerOptions.types` shuts out all other types not explicitly listed in the configuration. Using triple-slash references keeps the default TypeScript setting of accepting type information from the entire workspace, while also adding `svelte` and `vite/client` type information.
+To protect your history, go to **Settings → Backup** and export a backup now and then, and always before switching phones. **Restore from backup** loads it on the new device. Restoring replaces the data currently in the app.
 
-**Why include `.vscode/extensions.json`?**
+## Running it yourself
 
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
+You need [Node.js](https://nodejs.org/) and npm.
 
-**Why enable `allowJs` in the TS template?**
-
-While `allowJs: false` would indeed prevent the use of `.js` files in the project, it does not prevent the use of JavaScript syntax in `.svelte` files. In addition, it would force `checkJs: false`, bringing the worst of both worlds: not being able to guarantee the entire codebase is TypeScript, and also having worse typechecking for the existing JavaScript. In addition, there are valid use cases in which a mixed codebase may be relevant.
-
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/rixo/svelte-hmr#svelte-hmr).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```ts
-// store.ts
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+```bash
+npm install
+npm run dev      # dev server at http://localhost:5173
+npm run build    # production build in dist/
+npm run preview  # serve the production build locally
 ```
+
+The `dist/` folder is a static site and can be hosted anywhere. A Netlify configuration is included.
+
+## For developers
+
+Built with Svelte 5, TypeScript, Vite, and `idb`, plus `vite-plugin-pwa` for offline support. Architecture notes and contribution guidance are in [CLAUDE.md](CLAUDE.md). Run `npm run check` before building.
